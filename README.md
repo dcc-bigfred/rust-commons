@@ -15,8 +15,10 @@ HTTP, OAuth drop-in, reverse-proxy helpers, and dcc-bus WebSocket. No axum: the 
 
 ```toml
 [dependencies]
-bigfred-client = { git = "https://github.com/dcc-bigfred/sdk.git", branch = "main", path = "rust/crates/bigfred-client" }
+bigfred-client = { git = "https://github.com/dcc-bigfred/sdk.git", branch = "main" }
 ```
+
+Cargo resolves the crate by package name under `rust/crates/bigfred-client`.
 
 ### crates.io
 
