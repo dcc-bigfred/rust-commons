@@ -1,0 +1,28 @@
+[package]
+name = "bigfred-client"
+version = "0.1.0"
+edition = "2021"
+description = "HTTP, OAuth drop-in, and dcc-bus WebSocket client for BigFred"
+license = "MIT"
+repository = "https://github.com/dcc-bigfred/sdk"
+homepage = "https://github.com/dcc-bigfred/sdk"
+readme = "../../../README.md"
+
+[lib]
+name = "bigfred_client"
+path = "src/lib.rs"
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "charset", "http2"] }
+tokio = { version = "1", features = ["net", "time", "sync", "rt", "macros"] }
+tokio-tungstenite = "0.24"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+rand = "0.8"
+thiserror = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["net", "time", "sync", "rt", "macros", "rt-multi-thread"] }
