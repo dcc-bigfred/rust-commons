@@ -117,6 +117,10 @@ pub fn is_relevant_path(path: &Path, filter: &PathFilter) -> bool {
 
 /// Spawn an inotify thread. Returns debounce-coalesced [`Reload`] signals.
 ///
+/// Specs whose path is not a directory yet are retried until they appear
+/// (late-attach). A failed `watch()` on one spec is skipped; remaining specs
+/// keep running.
+///
 /// # Errors
 ///
 /// Fails if the watcher thread cannot be started.
@@ -140,6 +144,8 @@ pub fn spawn_signal(
 
 /// Spawn an inotify thread that invokes `on_reload` after debounce (and does
 /// not enqueue a channel signal).
+///
+/// Same late-attach and per-spec watch isolation as [`spawn_signal`].
 ///
 /// # Errors
 ///
@@ -171,6 +177,65 @@ where
     Ok(stop)
 }
 
+/// Register inotify for one spec. Missing recursive trees are left pending
+/// (late-attach). A failed `watch()` is logged and skipped so other specs
+/// keep working.
+fn attach_spec(watcher: &mut RecommendedWatcher, spec: &WatchSpec) -> bool {
+    let target = if spec.recursive {
+        spec.path.clone()
+    } else {
+        watch_dir_for(&spec.path)
+    };
+    if !spec.recursive && !target.is_dir() {
+        let _ = std::fs::create_dir_all(&target);
+    }
+    if !target.is_dir() {
+        return false;
+    }
+    let mode = if spec.recursive {
+        RecursiveMode::Recursive
+    } else {
+        RecursiveMode::NonRecursive
+    };
+    match watcher.watch(&target, mode) {
+        Ok(()) => {
+            log::info!("config watch active on {}", target.display());
+            true
+        }
+        Err(e) => {
+            log::warn!("config watch: cannot watch {}: {e}", target.display());
+            false
+        }
+    }
+}
+
+fn attach_pending(
+    watcher: &mut RecommendedWatcher,
+    specs: &[WatchSpec],
+    attached: &mut [bool],
+) -> bool {
+    let mut newly = false;
+    for (i, spec) in specs.iter().enumerate() {
+        if attached[i] {
+            continue;
+        }
+        if attach_spec(watcher, spec) {
+            attached[i] = true;
+            newly = true;
+        }
+    }
+    newly
+}
+
+fn fire_reload(reload_tx: &Option<Sender<Reload>>, on_reload: &Option<Box<dyn Fn() + Send>>) {
+    if let Some(tx) = reload_tx {
+        let _ = tx.send(Reload);
+    }
+    if let Some(cb) = on_reload {
+        cb();
+    }
+}
+
 fn watch_loop(
     specs: Vec<WatchSpec>,
     debounce: Duration,
@@ -187,27 +252,8 @@ fn watch_loop(
     )
     .map_err(|e| ConfigError::Other(format!("inotify watcher: {e}")))?;
 
-    for spec in &specs {
-        let watch_dir = watch_dir_for(&spec.path);
-        if !watch_dir.is_dir() {
-            let _ = std::fs::create_dir_all(&watch_dir);
-        }
-        let mode = if spec.recursive {
-            RecursiveMode::Recursive
-        } else {
-            RecursiveMode::NonRecursive
-        };
-        if watch_dir.is_dir() {
-            watcher
-                .watch(&watch_dir, mode)
-                .map_err(|e| ConfigError::Other(format!("watch {}: {e}", watch_dir.display())))?;
-            log::info!("config watch active on {}", watch_dir.display());
-        } else if let Some(parent) = watch_dir.parent() {
-            if parent.is_dir() {
-                let _ = watcher.watch(parent, RecursiveMode::NonRecursive);
-            }
-        }
-    }
+    let mut attached = vec![false; specs.len()];
+    let _ = attach_pending(&mut watcher, &specs, &mut attached);
 
     let mut pending: Option<Instant> = None;
     loop {
@@ -227,6 +273,9 @@ fn watch_loop(
 
         match raw_rx.recv_timeout(timeout) {
             Ok(Ok(event)) => {
+                if attach_pending(&mut watcher, &specs, &mut attached) {
+                    pending = Some(Instant::now());
+                }
                 let relevant = matches!(
                     event.kind,
                     EventKind::Create(_)
@@ -245,14 +294,12 @@ fn watch_loop(
                 log::warn!("config watch error: {e}");
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
+                if attach_pending(&mut watcher, &specs, &mut attached) {
+                    pending = Some(Instant::now());
+                }
                 if pending.is_some_and(|t| t.elapsed() >= debounce) {
                     pending = None;
-                    if let Some(tx) = &reload_tx {
-                        let _ = tx.send(Reload);
-                    }
-                    if let Some(cb) = &on_reload {
-                        cb();
-                    }
+                    fire_reload(&reload_tx, &on_reload);
                 }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -274,6 +321,7 @@ fn watch_dir_for(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use std::time::Duration;
 
     use super::*;
 
@@ -309,5 +357,93 @@ mod tests {
         ));
         assert!(!is_relevant_path(Path::new("/data/etc/notes.txt"), &f));
         assert!(!is_relevant_path(Path::new("/data/etc/.hidden.json"), &f));
+    }
+
+    #[test]
+    fn dir_watch_fires_on_json_replace() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("microinit.json");
+        std::fs::write(&path, "{}\n").unwrap();
+        let spec = WatchSpec {
+            path: dir.path().to_path_buf(),
+            recursive: false,
+            filter: PathFilter::Any {
+                extensions: vec!["json".into()],
+                extra_names: vec![
+                    "microinit.json".into(),
+                    "microinit.services.enabled-override.json".into(),
+                    "microinit.d".into(),
+                ],
+                ignore_suffixes: Vec::new(),
+            },
+        };
+        let (rx, _stop) = spawn_signal(vec![spec], Duration::from_millis(50)).unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        let tmp = dir.path().join("microinit.json.tmp");
+        std::fs::write(&tmp, "{\"v\":1}\n").unwrap();
+        std::fs::rename(&tmp, &path).unwrap();
+        rx.recv_timeout(Duration::from_secs(2))
+            .expect("reload after atomic json replace");
+    }
+
+    #[test]
+    fn late_recursive_dir_attaches_and_fires_reload() {
+        let root = tempfile::tempdir().unwrap();
+        let etc = root.path().join("etc");
+        std::fs::create_dir(&etc).unwrap();
+        std::fs::write(etc.join("microinit.json"), "{}\n").unwrap();
+        let dropins = etc.join("microinit.d").join("services");
+        let filter = PathFilter::Any {
+            extensions: vec!["json".into()],
+            extra_names: vec!["microinit.json".into(), "microinit.d".into()],
+            ignore_suffixes: Vec::new(),
+        };
+        let specs = vec![
+            WatchSpec {
+                path: etc.clone(),
+                recursive: false,
+                filter: filter.clone(),
+            },
+            WatchSpec {
+                path: dropins.clone(),
+                recursive: true,
+                filter,
+            },
+        ];
+        let (rx, _stop) = spawn_signal(specs, Duration::from_millis(50)).unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        while rx.try_recv().is_ok() {}
+
+        std::fs::create_dir_all(&dropins).unwrap();
+        std::fs::write(dropins.join("loco.json"), "{\"name\":\"loco\"}\n").unwrap();
+        rx.recv_timeout(Duration::from_secs(3))
+            .expect("reload after late drop-in create");
+    }
+
+    #[test]
+    fn failed_recursive_spec_does_not_kill_file_watch() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("cfg.json");
+        std::fs::write(&file, "{}\n").unwrap();
+        let not_a_dir = dir.path().join("blocked");
+        std::fs::write(&not_a_dir, "x\n").unwrap();
+        let specs = vec![
+            WatchSpec::file(file.clone()),
+            WatchSpec {
+                path: not_a_dir,
+                recursive: true,
+                filter: PathFilter::Any {
+                    extensions: vec!["json".into()],
+                    extra_names: Vec::new(),
+                    ignore_suffixes: Vec::new(),
+                },
+            },
+        ];
+        let (rx, _stop) = spawn_signal(specs, Duration::from_millis(50)).unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        while rx.try_recv().is_ok() {}
+        std::fs::write(&file, "{\"a\":1}\n").unwrap();
+        rx.recv_timeout(Duration::from_secs(2))
+            .expect("file watch still live after sibling spec failed");
     }
 }

@@ -13,6 +13,8 @@ dcc-daemon = { git = "https://github.com/dcc-bigfred/rust-commons.git", branch =
 
 Features: `ipc` (framing, bind, `Command` router), `config` (JSON load + inotify watch). Default enables both.
 
+Config watches late-attach directories that do not exist at spawn (drop-in trees). A failed `inotify` watch on one path is skipped; other specs keep running.
+
 Until the first crates.io release, use the git dependency above.
 
 ## IPC is always a singleton
