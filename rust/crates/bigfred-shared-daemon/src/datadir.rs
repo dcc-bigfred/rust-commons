@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn data_dir_absolute_wins() {
         with_clean_env(|| {
-            let dir = std::env::temp_dir().join(format!("dcc-daemon-dd-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!("bigfred-shared-daemon-dd-{}", std::process::id()));
             std::env::set_var(ENV_DATA_DIR, &dir);
             assert_eq!(root(), dir);
             assert_eq!(
@@ -254,7 +254,7 @@ mod tests {
         with_clean_env(|| {
             set_root("relative");
             assert_eq!(root(), PathBuf::from(DEFAULT_ROOT));
-            let dir = std::env::temp_dir().join(format!("dcc-daemon-set-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!("bigfred-shared-daemon-set-{}", std::process::id()));
             set_root(&dir);
             assert_eq!(root(), dir);
         });

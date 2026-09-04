@@ -1,4 +1,4 @@
-# dcc-daemon
+# bigfred-shared-daemon
 
 Shared runtime pieces for BigFred OS daemons:
 
@@ -8,7 +8,7 @@ Shared runtime pieces for BigFred OS daemons:
 
 ```toml
 [dependencies]
-dcc-daemon = { git = "https://github.com/dcc-bigfred/rust-commons.git", branch = "main" }
+bigfred-shared-daemon = { git = "https://github.com/dcc-bigfred/rust-commons.git", branch = "main" }
 ```
 
 Features: `ipc` (framing, bind, `Command` router), `config` (JSON load + inotify watch). Default enables both.

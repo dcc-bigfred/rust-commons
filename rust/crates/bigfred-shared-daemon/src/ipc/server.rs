@@ -386,7 +386,7 @@ mod tests {
             path: sock.clone(),
             mode: 0o600,
             chown: None,
-            process_name: "dcc-daemon-test",
+            process_name: "bigfred-shared-daemon-test",
         };
         let state = Arc::new(AtomicUsize::new(0));
         let server = Server::bind(
@@ -425,7 +425,7 @@ mod tests {
             path: sock.clone(),
             mode: 0o600,
             chown: None,
-            process_name: "dcc-daemon-test",
+            process_name: "bigfred-shared-daemon-test",
         };
         let _first = bind(&opts).unwrap();
         let err = bind(&opts).unwrap_err();
@@ -460,7 +460,7 @@ mod tests {
             path: sock.clone(),
             mode: 0o600,
             chown: None,
-            process_name: "dcc-daemon-test",
+            process_name: "bigfred-shared-daemon-test",
         };
         let server = Server::bind(
             opts,
@@ -495,7 +495,7 @@ mod tests {
             path: sock.clone(),
             mode: 0o600,
             chown: None,
-            process_name: "dcc-daemon-test",
+            process_name: "bigfred-shared-daemon-test",
         };
         let first = bind(&opts).unwrap();
         drop(first);
