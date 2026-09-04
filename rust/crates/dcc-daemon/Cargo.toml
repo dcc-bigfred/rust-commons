@@ -1,0 +1,32 @@
+[package]
+name = "dcc-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "Shared data-dir, config hot-reload, and Unix-socket command server for BigFred OS daemons"
+readme = "README.md"
+
+[features]
+default = ["ipc", "config"]
+ipc = ["dep:serde", "dep:serde_json", "dep:nix"]
+config = ["dep:serde", "dep:serde_json", "dep:notify", "dep:signal-hook"]
+
+[dependencies]
+log = "0.4"
+thiserror = "2"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+notify = { version = "8.2.0", optional = true }
+signal-hook = { version = "0.3", optional = true }
+nix = { version = "0.29", features = ["socket", "user", "fs"], optional = true }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+
+[lints]
+workspace = true

@@ -1,32 +1,20 @@
-# BigFred SDK
+# BigFred Rust commons
 
-Client libraries for [BigFred](https://github.com/dcc-bigfred/bigfred).
+Shared modules and architectural patterns for hub daemons written in Rust.
 
-| Language | Path | Status |
-|---|---|---|
-| Rust | [`rust/`](rust/) | `bigfred-client` |
-| Go | `go/` | planned |
+The HTTP / OAuth / dcc-bus **client SDK** lives in [`dcc-bigfred/bigfred`](https://github.com/dcc-bigfred/bigfred) (`rust/crates/bigfred-client`).
 
-## Rust — `bigfred-client`
+| Crate | Path | Role |
+| --- | --- | --- |
+| `dcc-daemon` | [`rust/crates/dcc-daemon`](rust/crates/dcc-daemon) | `$DATA_DIR` paths, config load + hot-reload, Unix-socket command server (IPC bind is always singleton — see [crate README](rust/crates/dcc-daemon/README.md)) |
 
-HTTP, OAuth drop-in, reverse-proxy helpers, and dcc-bus WebSocket. No axum: the host owns HTTP handlers and maps errors onto its envelope.
-
-### Git (from `main`)
+## Rust — `dcc-daemon`
 
 ```toml
 [dependencies]
-bigfred-client = { git = "https://github.com/dcc-bigfred/sdk.git", branch = "main" }
+dcc-daemon = { git = "https://github.com/dcc-bigfred/rust-commons", branch = "main" }
 ```
 
-Cargo resolves the crate by package name under `rust/crates/bigfred-client`.
+Features: `ipc` (framing, bind, `Command` router), `config` (JSON load + inotify watch). Default enables both.
 
-### crates.io
-
-Published on tag `v*` (`cargo publish -p bigfred-client`). Until the first release, use the git dependency above.
-
-```toml
-[dependencies]
-bigfred-client = "0.1"
-```
-
-The crate’s `reqwest` build has no TLS features (loopback HTTP to BigFred on the hub).
+Until the first crates.io release, use the git dependency above.
