@@ -6,13 +6,13 @@ The HTTP / OAuth / dcc-bus **client SDK** lives in [`dcc-bigfred/bigfred`](https
 
 | Crate | Path | Role |
 | --- | --- | --- |
-| `dcc-daemon` | [`rust/crates/dcc-daemon`](rust/crates/dcc-daemon) | `$DATA_DIR` paths, config load + hot-reload, Unix-socket command server (IPC bind is always singleton — see [crate README](rust/crates/dcc-daemon/README.md)) |
+| `bigfred-shared-daemon` | [`rust/crates/bigfred-shared-daemon`](rust/crates/bigfred-shared-daemon) | `$DATA_DIR` paths, config load + hot-reload, Unix-socket command server (IPC bind is always singleton — see [crate README](rust/crates/bigfred-shared-daemon/README.md)) |
 
-## Rust — `dcc-daemon`
+## Rust — `bigfred-shared-daemon`
 
 ```toml
 [dependencies]
-dcc-daemon = { git = "https://github.com/dcc-bigfred/rust-commons", branch = "main" }
+bigfred-shared-daemon = { git = "https://github.com/dcc-bigfred/rust-commons", branch = "main" }
 ```
 
 Features: `ipc` (framing, bind, `Command` router), `config` (JSON load + inotify watch). Default enables both.
